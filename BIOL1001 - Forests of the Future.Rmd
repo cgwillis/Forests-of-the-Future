@@ -1,0 +1,351 @@
+---
+title: "BIOL1001 LAB 13: Forest of the Future"
+author: "Charlie Willis"
+date: "11/29/2018"
+output: html_document
+---
+
+```{r STEP 1: Setup R, include=FALSE}
+# Set the working directory
+setwd('~/Desktop/Forests of the Future/')
+
+# Set data directories
+env_dir = '~/Desktop/Forests of the Future/Data/Environmental layers/'
+
+# Set library directory
+lib_dir = '~/Desktop/Forests of the Future/Rlibrary'
+.libPaths(lib_dir)
+# R uses 'libraries' or 'packages', which are a pre-built set of functions the modify, analysis, and graph data.
+library(rgbif, lib.loc = lib_dir)
+library(spocc, lib.loc = lib_dir)
+library(dismo, lib.loc = lib_dir)
+library(ggplot2, lib.loc = lib_dir)
+
+tmp_dir ='~/Desktop/Forests of the Future/temp/'
+rasterOptions(tmpdir = tmp_dir)
+```
+
+```{r STEP 2: Import environmental data}
+# Import current and future environmental data
+# www.worldclim.org
+  predictors = getData("worldclim",var="bio",res=10)
+  he85_70 = getData('CMIP5', var='bio', res=10, rcp=85, model='HE', year=70)
+    names(he85_70) = names(predictors)
+
+# Export variables
+  #writeRaster(predictors,filename = names(predictors), bylayer = T, overwrite = T, format="ascii")
+  #writeRaster(he85_50,filename = names(he85_50), bylayer = T, overwrite = T, format="ascii")
+  #writeRaster(he85_70,filename = names(he85_70), bylayer = T, overwrite = T, format="ascii")
+  
+breaks <- seq(-200, 350, by=10)
+colBIO1 = colorRampPalette(c("#313695","#74add1","#ffffbf","#f46d43","#a50026"))(length(breaks))
+arg = list(at=c(-200,-100,0,100,200,300,400), labels=c('-200','-100','0','100','200','300','400'))
+plot(predictors[[1]], main = 'Current Mean Annual Temperature (C)',xlab='longitude',ylab='latitude', breaks = breaks, col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+plot(he85_70[[1]], main = '2070 - RCP8.5 - Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',breaks = breaks, col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+
+# Compare mean change in global temperate between present and 2070
+set.seed(100)
+bg = randomPoints(predictors[[1]],10000)
+
+# Extract climate data for background points
+bg_gb_current = as.data.frame(extract(predictors,bg))
+bg_gb_he85_70 = as.data.frame(extract(he85_70,bg))
+
+bg_gb_current$name  = 'Current'
+bg_gb_he85_70$name  = '2070'
+bg_gb_comp = rbind(bg_gb_current,bg_gb_he85_70)
+bg_gb_comp$name = factor(bg_gb_comp$name, levels=c("Current","2070")) # reorder factors
+boxplot(bio1~name, data=bg_gb_comp, notch=F,col=(c('#fdbb84','#e34a33')),ylab="Mean Annual Temperature",main="Change in Global Mean Annual Temperature")
+text(1.5,325,paste("Increase of ",round((mean(bg_gb_he85_70$bio1)-mean(bg_gb_current$bio1))/10,2),"C",sep=''))
+```
+
+```{r STEP 3: Crop environmental data for North America and Minnesota}
+# Crop the global climate maps to only North America
+e = extent(-175, -45, 14.5, 83.5)
+predictors = crop(predictors,e)
+he85_70 = crop(he85_70,e)
+
+
+# Crop climate variables for Minnesota
+  us = getData("GADM",country="USA",level=1)
+  mn = us[us$NAME_1 %in% 'Minnesota',]
+  predictorsMN = crop(mask(predictors,mn),mn)
+  he85_70MN    = crop(mask(he85_70,mn),mn)
+  
+  
+breaks <- seq(-200, 350, by=10)
+colBIO1 = colorRampPalette(c("#313695","#74add1","#ffffbf","#f46d43","#a50026"))(length(breaks))
+arg = list(at=c(-200,-100,0,100,200,300,400), labels=c('-200','-100','0','100','200','300','400'))
+plot(predictors[[1]], main = 'Current Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+  plot(mn,add=T,lwd=1)
+plot(he85_70[[1]], main = '2070 - RCP8.5 - Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+  plot(mn,add=T,lwd=1)
+plot(predictorsMN[[1]], main = 'Current Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',breaks = breaks, col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+  plot(mn,add=T,lwd=2)
+plot(he85_70MN[[1]], main = '2070 - RCP8.5 - Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',breaks = breaks, col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+  plot(mn,add=T,lwd=2)
+
+# Compare mean change in temperate between present and 2070 for NA and MN
+set.seed(100)
+bg = randomPoints(predictors[[1]],50000)
+
+# Extract climate data for background points
+bg_na_current = as.data.frame(extract(predictors,bg))
+bg_na_he85_70 = as.data.frame(extract(he85_70,bg))
+
+bg_na_current$name  = 'Current'
+bg_na_he85_70$name  = '2070'
+bg_na_comp = rbind(bg_na_current,bg_na_he85_70)
+bg_na_comp$name = factor(bg_na_comp$name, levels=c("Current","2070")) # reorder factors
+boxplot(bio1~name, data=bg_na_comp, notch=F,col=(c('#fdbb84','#e34a33')),ylab="Mean Annual Temperature",main="Change in Mean Annual Temperature for North America")
+text(1.5,225,paste("Increase of ",round((mean(bg_na_he85_70$bio1)-mean(bg_na_current$bio1))/10,2),"C",sep=''))
+
+# Compare mean change in temperate between present and 2070 for NA and MN
+bgMN = randomPoints(predictors[[1]],50000)
+
+# Extract climate data for background points
+bg_mn_current = as.data.frame(extract(predictorsMN,bgMN))
+bg_mn_he85_70 = as.data.frame(extract(he85_70MN,bgMN))
+
+bg_mn_current$name  = 'Current'
+bg_mn_he85_70$name  = '2070'
+bg_mn_comp = rbind(bg_mn_current,bg_mn_he85_70)
+bg_mn_comp$name = factor(bg_mn_comp$name, levels=c("Current","2070")) # reorder factors
+boxplot(bio1~name, data=bg_mn_comp, notch=F,col=(c('#fdbb84','#e34a33')),ylab="Mean Annual Temperature",main="Change in Mean Annual Temperature for Minnesota")
+text(1.5,90,paste("Increase of ",round((mean(bg_mn_he85_70$bio1,na.rm=T)-mean(bg_mn_current$bio1,na.rm=T))/10,2),"C",sep=''))
+```
+
+```{r STEP 4: Import species distribution data}
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
+# ENTER YOUR SPECIES NAMES HERE:
+species1 = 'Fraxinus nigra'
+species2 = 'Juglans nigra'
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
+
+
+# Import species distribution data from GBIF
+dat = occ_search(scientificName=c(species1,species2), limit=10000, basisOfRecord='PRESERVED_SPECIMEN', return = 'data', hasCoordinate = T)
+
+# Edit occurrence data for species 1
+sp1 = as.data.frame(dat[[1]])
+sp1 = sp1[,c('name','decimalLongitude','decimalLatitude')]
+sp1 = subset(sp1,name==names(sort(table(sp1$name),decreasing=TRUE))[[1]])
+names(sp1) = c('species','lon','lat')
+coordinates(sp1)  = c('lon','lat')
+crs(sp1) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0 ")
+sp1_coords = crop(sp1, e)
+sp1 = as.data.frame(sp1_coords)
+
+# Edit occurrence data for species 2
+sp2 = as.data.frame(dat[[2]])
+sp2 = sp2[,c('name','decimalLongitude','decimalLatitude')]
+sp2 = subset(sp2,name==names(sort(table(sp2$name),decreasing=TRUE))[[1]])
+names(sp2) = c('species','lon','lat')
+coordinates(sp2)  = c('lon','lat')
+crs(sp2) <- CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0 ")
+sp2_coords = crop(sp2, e)
+sp2 = as.data.frame(sp2_coords)
+
+occData = rbind(sp1,sp2)
+write.csv(occData,'~/Desktop/Forests of the Future/Data/Occurrences/species_occurrence_data.csv',quote = F,row.names = F)
+
+# Plot species distribution data
+### Plot species occurrences for North America
+col1 = '#ffcc33'
+col2 = '#7a0019'
+
+
+plot(predictors[[1]], xlab='longitude',ylab='latitude',,col=colBIO1,main='Mean Annual Temperature')
+  plot(mn,add=T,lwd=1)
+points(sp1_coords, pch=19, col=col1, cex=0.5)
+points(sp2_coords, pch=18, col=col2, cex=0.7)
+
+# Add legend to the plot
+points(-195,35, pch=19, col=col1, cex=1)
+text(-195,35,species1, pos=4, font = 3)
+points(-195,30, pch=18, col=col2, cex=1)
+text(-195,30,species2, pos=4, font = 3)
+
+### Plot species occurrences for Minnesota
+plot(predictorsMN[[1]], main = 'Current Mean Annual Temperature (C)',xlab='longitude',ylab='latitude',breaks = breaks, col=colBIO1 ,zlim=c(-200, 350),axis.args=arg)
+  plot(mn,add=T,lwd=2)
+
+sp1_coordsMN = sp1_coords[mn,]
+sp2_coordsMN = sp2_coords[mn,]
+points(sp1_coordsMN, pch=19, col=col1, cex=1)
+points(sp2_coordsMN, pch=18, col=col2, cex=1)
+
+# Add legend to the plot
+points(-91,45, pch=19, col=col1, cex=1.1)
+text(-91,45,species1, pos=4, font = 3)
+points(-91,44.5, pch=18, col=col2, cex=1.1)
+text(-91,44.5,species2, pos=4, font = 3)
+```
+
+```{r STEP 5: Characterize species climate niche}
+# Set what variables to compare
+# We will be comparing Mean Annual Temperature (BIO1) & Total Annual Precipitation (BIO12)
+# Variable List: http://www.worldclim.org/bioclim
+var1 = 'bio1' 
+var2 = 'bio12'
+var1.name = "Mean Annual Temperature"
+var2.name = "Total Annual Precipitation"
+
+# Extract current climate data for each species
+sp1_clim = as.data.frame(extract(predictors,sp1_coords))
+  sp1_clim = na.omit(sp1_clim)
+sp2_clim = as.data.frame(extract(predictors,sp2_coords))
+  sp2_clim = na.omit(sp2_clim)
+  
+# Generate 5000 random background dataset of NA climate
+set.seed(100)
+bg = randomPoints(predictors[[1]],5000)
+
+# Extract climate data for background points
+bg_clim = as.data.frame(extract(predictors,bg))
+
+bg_clim$name  = 'background'
+sp1_clim$name = species1
+sp2_clim$name = species2
+sp_clim = rbind(sp1_clim,sp2_clim,bg_clim)
+sp_clim$name = factor(sp_clim$name, levels=c(species1, species2, "background")) # reorder factors
+
+plot(bg_clim[,var1],bg_clim[,var2],xlab=var1.name, ylab=var2.name, pch = 19, col='grey', cex = 0.5,main="Climate variation across North America")
+  points(sp1_clim[,var1],sp1_clim[,var2],pch=19,col=col1,cex=0.75)
+    hpts <- chull(sp1_clim[,c(var1,var2)])
+    hpts <- c(hpts, hpts[1])
+    lines(sp1_clim[,c(var1,var2)][hpts, ],col = col1)
+  points(sp2_clim[,var1],sp2_clim[,var2],pch=18,col=col2,cex=0.75)
+    hpts <- chull(sp2_clim[,c(var1,var2)])
+    hpts <- c(hpts, hpts[1])
+    lines(sp2_clim[,c(var1,var2)][hpts, ],col = col2)
+    
+# Add legend to the plot
+  points(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.95, pch=19, col=col1, cex=1)
+  text(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.95,species1, pos=4, font = 3)
+  points(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.9, pch=18, col=col2, cex=1)
+  text(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.9,species2, pos=4, font = 3)
+  points(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.85, pch=19, col='grey', cex=1)
+  text(min(bg_clim[,var1])*.95,max(bg_clim[,var2])*.85,'Background data', pos=4)
+
+sp_clim_sub = subset(sp_clim,!name=='background')
+sp_clim_sub$name = sp_clim_sub$name[ , drop=TRUE]
+boxplot(sp_clim_sub[,var1]~name, data=sp_clim_sub, notch=F,col=(c(col1,col2)),main=var1.name,ylab=var1.name)
+boxplot(sp_clim_sub[,var2]~name, data=sp_clim_sub,notch=F,col=(c(col1,col2)),main=var2.name,ylab=var2.name)
+```
+
+---------------------------------------------------------------------
+---STEP 6: Leave R to run the species distribution model in MaxEnt---
+---------------------------------------------------------------------
+
+```{r STEP 7: Import Species Distribution Model Outputs}
+# Set MaxEnt output directory
+  maxent_dir = '~/Desktop/Forests of the Future/Output/'
+
+# list all files in MaxEnt output directory
+  maxent_ls = list.files(maxent_dir,full.names = T)
+  
+# Select only current and future habitat projections maps from output directory
+  maxent_ls = maxent_ls[grep('.asc',maxent_ls)]
+  maxent_ls = c(maxent_ls[grep('Current.asc',maxent_ls)],maxent_ls[grep('2070.asc',maxent_ls)])
+
+# Create a stack of your projections for each species
+  sp1_proj = stack(maxent_ls[grep(gsub(' ','_',species1),maxent_ls)])
+  sp2_proj = stack(maxent_ls[grep(gsub(' ','_',species2),maxent_ls)])
+
+# Plot Current and future projections for each species across North America
+  breaks <- seq(0, 1, by=.01)
+  colPROJ = rev(terrain.colors(length(breaks)))
+  arg = list(at=c(0,.2,.4,.6,.8,1), labels=c('0','.2','.4','.6','.8','1'))
+  
+  par(mfrow=c(2,2))
+    plot(sp1_proj[[1]],main = names(sp1_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+    plot(sp1_proj[[2]],main = names(sp1_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg)
+    plot(sp2_proj[[1]],main = names(sp2_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+    plot(sp2_proj[[2]],main = names(sp2_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg)
+
+# Plot Current and future projections for each species across Minnesota
+  sp1_projMN = crop(mask(sp1_proj,mn),mn)
+  sp2_projMN = crop(mask(sp2_proj,mn),mn)
+  
+  par(mfrow=c(2,2))
+    plot(sp1_projMN[[1]],main = names(sp1_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+    plot(sp1_projMN[[2]],main = names(sp1_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg)
+      plot(mn,add=T,lwd=2)
+    plot(sp2_projMN[[1]],main = names(sp2_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+    plot(sp2_projMN[[2]],main = names(sp2_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg)
+      plot(mn,add=T,lwd=2)
+```
+
+```{r STEP 8: Threshold Species Distribution Model Outputs}
+# Convert probabilities to presence/absence
+  maxent.results = read.csv('~/Desktop/Forests of the Future/Output/maxentResults.csv')
+  #thresh = maxent.results$X10.percentile.training.presence.Cloglog.threshold
+  thresh = c(0.1,0.1)
+  sp1_threshMatrix = matrix(c(0,thresh[[1]],0,thresh[[1]],1,1),ncol=3, byrow=TRUE)
+  sp2_threshMatrix = matrix(c(0,thresh[[2]],0,thresh[[2]],1,1),ncol=3, byrow=TRUE)
+  
+  sp1_projMN_PA = reclassify(sp1_projMN, sp1_threshMatrix)
+    names(sp1_projMN_PA) = names(sp1_projMN)
+  sp2_projMN_PA = reclassify(sp2_projMN, sp2_threshMatrix)
+    names(sp2_projMN_PA) = names(sp2_projMN)
+    
+  par(mfrow=c(2,2))
+    plot(sp1_projMN_PA[[1]],main = names(sp1_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+    plot(sp1_projMN_PA[[2]],main = names(sp1_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+    plot(sp2_projMN_PA[[1]],main = names(sp2_proj)[[1]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+    plot(sp2_projMN_PA[[2]],main = names(sp2_proj)[[2]], xlab='longitude',ylab='latitude',col=colPROJ ,zlim=c(0, 1),axis.args=arg, legend=FALSE)
+      plot(mn,add=T,lwd=2)
+```
+
+```{r STEP 9: Analysis Species Distribution Model Outputs}
+# Calculate summary statistics for Species 1
+ sp1_sumNA = cellStats(sp1_proj,'sum')
+ sp1_sumMN = cellStats(sp1_projMN,'sum')
+ 
+  sp1.net.change.NA.2070 = ((sp1_sumNA[[2]] - sp1_sumNA[[1]])/sp1_sumNA[[1]]) * 100
+  sp1.net.change.MN.2070 = ((sp1_sumMN[[2]] - sp1_sumMN[[1]])/sp1_sumMN[[1]]) * 100
+
+# Calculate summary statistics for Species 2
+ sp2_sumNA = cellStats(sp2_proj,'sum')
+ sp2_sumMN = cellStats(sp2_projMN,'sum')
+ 
+  sp2.net.change.NA.2070 = ((sp2_sumNA[[2]] - sp2_sumNA[[1]])/sp2_sumNA[[1]]) * 100
+  sp2.net.change.MN.2070 = ((sp2_sumMN[[2]] - sp2_sumMN[[1]])/sp2_sumMN[[1]]) * 100
+
+sp1_summary = as.data.frame(c(sp1.net.change.NA.2070,sp1.net.change.MN.2070))
+sp1_summary$year  = as.character(c(2070,2070))
+sp1_summary$level = c('NA','MN')
+names(sp1_summary) = c('Percent.Change','Year','Region')
+
+sp1_net_plot = ggplot(sp1_summary, aes(fill=Year, y=Percent.Change, x=Region)) + 
+     geom_bar(position="dodge", stat="identity", fill = col1) +
+     scale_fill_manual(values=c('#fc9272','#de2d26')) +
+      theme(axis.text.x = element_text(face = "bold", size = 14)) +
+      theme(axis.text.y = element_text(face = "bold", size = 14)) +
+      theme(axis.title = element_text(face = "bold", size = 16)) + 
+      theme(plot.title = element_text(face = "bold.italic", size = 24)) +
+      ggtitle(species1) + labs(y="Percentage Net Change in Habitat")
+sp1_net_plot
+
+sp2_summary = as.data.frame(c(sp2.net.change.NA.2070,sp2.net.change.MN.2070))
+sp2_summary$year  = as.character(c(2070,2070))
+sp2_summary$level = c('NA','MN')
+names(sp2_summary) = c('Percent.Change','Year','Region')
+
+sp2_net_plot = ggplot(sp2_summary, aes(fill=Year, y=Percent.Change, x=Region)) + 
+     geom_bar(position="dodge", stat="identity", fill = col2) +
+     scale_fill_manual(values=c('#fc9272','#de2d26')) +
+      theme(axis.text.x = element_text(face = "bold", size = 14)) +
+      theme(axis.text.y = element_text(face = "bold", size = 14)) +
+      theme(axis.title = element_text(face = "bold", size = 16)) + 
+      theme(plot.title = element_text(face = "bold.italic", size = 24)) +
+      ggtitle(species2) + labs(y="Percentage Net Change in Habitat")
+sp2_net_plot
+
+```
